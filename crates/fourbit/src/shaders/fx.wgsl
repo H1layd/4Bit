@@ -203,6 +203,9 @@ fn fs(i: VsOut) -> @location(0) vec4<f32> {
     let size = vec2<f32>(textureDimensions(normals));
     let nq = clamp(vec2<i32>(i.uv * size), vec2<i32>(0), vec2<i32>(size) - 1);
     let ns = textureLoad(normals, nq, 0);
+    // the viewmodel (hands, weapon) sits right at the lens: no air in front of it to light up (marching the sky's
+    // 80 m over it washed a pistol out into a ghost)
+    if (ns.a > 0.1 && ns.a < 0.5) { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }
     if (ns.a < 0.5) {
         // sky / nothing drawn: lamps still glow against it
         let far = world_at(i.uv, 0.9999);

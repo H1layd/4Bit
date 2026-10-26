@@ -190,7 +190,11 @@ fn exterior(p: vec3<f32>) -> bool {
 // Storey index of a height (lamps don't light through slabs); one storey when storeys are off.
 fn band(y: f32) -> f32 { let h = g.zones.y; return select(0.0, floor((y + h) / h), h > 0.0); }
 
-fn lighting(wpos: vec3<f32>, n: vec3<f32>, rough: f32) -> Light2 {
+// `volume`: smoke and dust scatter light from every side, so lights reach them without the cosine and without a
+// highlight (lit like a surface they only showed where a lamp happened to face the billboard)
+fn lighting(wpos: vec3<f32>, n: vec3<f32>, rough: f32, volume: bool) -> Light2 {
+    let wrap = select(0.0, 1.0, volume);
+    let gloss = select(1.0, 0.0, volume);
     let v = normalize(g.cam_pos.xyz - wpos);
     // indoor base, a little brighter from above; edges catch it (rim) so forms read in the dark
     var amb = g.in_amb.rgb * (0.75 + 0.25*n.y);
@@ -205,7 +209,7 @@ fn lighting(wpos: vec3<f32>, n: vec3<f32>, rough: f32) -> Light2 {
     let rim = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 4.0);
     var light: Light2;
     light.diff = amb;
-    light.spec = vec3<f32>(0.07,0.10,0.16) * g.in_amb.w * rim * (1.0 - rough * 0.5);
+    light.spec = vec3<f32>(0.07,0.10,0.16) * g.in_amb.w * rim * (1.0 - rough * 0.5) * gloss;
     let count = u32(g.fog_params.z);
     let f_out = exterior(wpos + n * 0.08);
     for (var i = 0u; i < MAX_LIGHTS; i++) {
@@ -230,8 +234,10 @@ fn lighting(wpos: vec3<f32>, n: vec3<f32>, rough: f32) -> Light2 {
         var att = clamp(1.0 - dist / range, 0.0, 1.0);
         att *= att * gate;
         if (att > 0.0) {
-            let s = shade(n, v, dv / dist, g.light_col[i].rgb * att * lamp_visibility(i, wpos, n), 0.2, rough);
-            light.diff += s.diff; light.spec += s.spec;
+            // smoke hugging a wall sat in the shadow maps' acne (a soot stain); a few cm of smoke need no shadow
+            let vis = select(lamp_visibility(i, wpos, n), 1.0, volume);
+            let s = shade(n, v, dv / dist, g.light_col[i].rgb * att * vis, max(0.2, wrap), rough);
+            light.diff += s.diff; light.spec += s.spec * gloss;
         }
         // the floor under a lamp throws some of it back up: ceilings, the undersides of flights and the upper walls
         // get a soft fill instead of black (concrete indoors, snow outdoors, set per lamp); diffuse only, no shadow
@@ -243,7 +249,7 @@ fn lighting(wpos: vec3<f32>, n: vec3<f32>, rough: f32) -> Light2 {
             let bd = max(length(bv), 1e-3);
             var batt = clamp(1.0 - bd / (range * 1.3), 0.0, 1.0);
             batt *= batt * gate;
-            light.diff += g.light_col[i].rgb * bounce * batt * (clamp(dot(n, bv / bd), 0.0, 1.0) * 0.55 + 0.45);
+            light.diff += g.light_col[i].rgb * bounce * batt * max(clamp(dot(n, bv / bd), 0.0, 1.0) * 0.55 + 0.45, wrap);
         }
     }
     let fd = wpos - g.flash_pos.xyz;
@@ -253,14 +259,14 @@ fn lighting(wpos: vec3<f32>, n: vec3<f32>, rough: f32) -> Light2 {
     var fatt = clamp(1.0 - fdist / g.flash_params.x, 0.0, 1.0);
     fatt *= fatt;
     if (beam * fatt * g.flash_params.w > 0.0) {
-        let sh = flash_shadow(wpos, n);
-        let s = shade(n, v, -fdir, g.flash_col.rgb * beam * fatt * g.flash_params.w, 0.1, rough);
+        let sh = select(flash_shadow(wpos, n), 1.0, volume);
+        let s = shade(n, v, -fdir, g.flash_col.rgb * beam * fatt * g.flash_params.w, max(0.1, wrap), rough);
         light.diff += s.diff * sh;
         // snow sparkle: ice grains on the ground flash back at the torch. Only snow: on concrete walls the same
         // sub-pixel glints read as white noise at 360 lines
         let snow = select(0.0, smoothstep(0.7, 0.9, n.y), f_out);
         let glint = step(0.9935, hash3(floor(wpos * 140.0))) * snow * clamp(dot(n, -fdir), 0.0, 1.0);
-        light.spec += (s.spec + g.flash_col.rgb * beam * fatt * glint * 1.2) * sh;
+        light.spec += (s.spec + g.flash_col.rgb * beam * fatt * glint * 1.2) * sh * gloss;
     }
     return light;
 }
@@ -309,7 +315,8 @@ fn surface(i: VsOut, front: bool) -> Surf {
 
     var c = t.rgb * d.color.rgb;
     if (d.params.x < 0.5) {
-        let l = lighting(i.wpos, n, clamp(d.params.w*surface.a,0.09,1.0));
+        // roughness above 1.5 marks smoke and dust (render::roughness)
+        let l = lighting(i.wpos, n, clamp(d.params.w*surface.a,0.09,1.0), d.params.w > 1.5);
         c = c * l.diff + l.spec;
     }
     let outside=exterior(i.wpos+n*0.08);
@@ -319,6 +326,7 @@ fn surface(i: VsOut, front: bool) -> Surf {
     c=mix(c,fog_color,fog*abs(d.params.y));
     var o: FsOut;
     o.color = vec4<f32>(c, t.a * d.color.a);
-    o.normal = vec4<f32>(n * 0.5 + 0.5, select(1.0, 0.0, d.params.x > 0.5 || g.cam_pos.w < 0.5));
+    // normal alpha tells fx.wgsl what the pixel is: 1 lit world surface, 0 sky / unlit, 0.25 the viewmodel pass
+    o.normal = vec4<f32>(n * 0.5 + 0.5, select(select(1.0, 0.0, d.params.x > 0.5), 0.25, g.cam_pos.w < 0.5));
     return Surf(o, t.a);
 }

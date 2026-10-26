@@ -26,6 +26,9 @@ pub struct Sfx {
     clips: HashMap<String, Clip>, loops: Vec<Loop>,
     pub listener: Vec3, pub right: Vec3, pub muted: bool,
     rng: u32, last_step: usize, last_take: HashMap<String, usize>, far_in: f32,
+    /// 0..1, ears ringing after a shot: the background (loops, far events) drops away and comes back; one-shots
+    /// (the shot itself, steps) are left as they are
+    deaf: f32,
 }
 impl Sfx {
     pub fn new(dir: std::path::PathBuf, muted: bool) -> Self {
@@ -46,7 +49,7 @@ impl Sfx {
                 if let Some(name) = p.file_stem().and_then(|s| s.to_str()) { clips.insert(name.to_string(), Clip { samples: samples.into(), rate }); }
             }
         }
-        Self { _stream: stream, handle, clips, loops: vec![], listener: Vec3::ZERO, right: Vec3::X, muted, rng: 1234567, last_step: 0, last_take: HashMap::new(), far_in: 15.0 }
+        Self { _stream: stream, handle, clips, loops: vec![], listener: Vec3::ZERO, right: Vec3::X, muted, rng: 1234567, last_step: 0, last_take: HashMap::new(), far_in: 15.0, deaf: 0.0 }
     }
     fn random(&mut self) -> f32 {
         self.rng ^= self.rng << 13; self.rng ^= self.rng >> 17; self.rng ^= self.rng << 5;
@@ -104,7 +107,7 @@ impl Sfx {
         self.far_in = 25.0 + self.random() * 45.0;
         let Some(name) = self.take("far") else { return };
         let (pan, pitch) = (self.random() * 1.4 - 0.7, 0.94 + self.random() * 0.1);
-        self.pan(&name, if indoors { 0.07 } else { 0.22 }, pitch, pan);
+        self.pan(&name, if indoors { 0.07 } else { 0.22 } * (1.0 - self.deaf), pitch, pan);
     }
     pub fn start_loop(&mut self, name: &str, pos: Vec3, volume: f32, range: f32) -> Option<usize> {
         if self.muted { return None; }
@@ -116,11 +119,16 @@ impl Sfx {
     pub fn set_loop(&mut self, id: Option<usize>, volume: f32, pos: Vec3) {
         if let Some(l) = id.and_then(|i| self.loops.get_mut(i)) { l.volume=volume; l.pos=pos; }
     }
+    /// A bang next to the head: the world goes dull at once (`amount` 0..1, e.g. more indoors than in the open).
+    pub fn deafen(&mut self, amount: f32) { self.deaf = (self.deaf + amount).min(0.9); }
     pub fn update(&mut self,dt:f32) {
+        self.deaf *= (-1.6 * dt).exp();
         for l in &self.loops {
             let k = (1.0-l.pos.distance(self.listener)/l.range).clamp(0.0,1.0);
-            let target=if self.muted {0.0} else {l.volume*k*k};
-            let gain=l.sink.volume();l.sink.set_volume(gain+(target-gain)*(1.0-(-12.0*dt).exp()));
+            let target=if self.muted {0.0} else {l.volume*k*k*(1.0-0.85*self.deaf)};
+            // it drops at once and comes back slowly
+            let gain=l.sink.volume();let rate=if target<gain {40.0} else {12.0};
+            l.sink.set_volume(gain+(target-gain)*(1.0-(-rate*dt).exp()));
         }
     }
 }

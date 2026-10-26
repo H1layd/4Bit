@@ -185,6 +185,7 @@ fn eye_of(vp: Mat4) -> Vec3 { let p = vp.inverse() * glam::Vec4::new(0.0, 0.0, 0
 
 /// Roughness by texture: metal / plastic / gun parts shine, plaster and concrete don't.
 fn roughness(tex: &str) -> f32 {
+    if tex.starts_with("fx_smoke") { return 2.0; } // not a surface: scene.wgsl lights it as a volume
     if tex.starts_with("cellar") || tex.starts_with("hall_") || tex=="facade" || tex.starts_with("snow") { 0.95 }
     else if tex.starts_with("models/props/") {0.95}
     else if tex.starts_with("models/citizen/") { 0.88 }
@@ -242,6 +243,7 @@ pub struct Gfx {
     scene_pipe: wgpu::RenderPipeline,
     opaque_pipe: wgpu::RenderPipeline,
     flash_pipe: wgpu::RenderPipeline,
+    smoke_pipe: wgpu::RenderPipeline,
     shadow_pipe: wgpu::RenderPipeline,
     fx_pipe: wgpu::RenderPipeline,
     bright_pipe: wgpu::RenderPipeline,
@@ -439,6 +441,19 @@ impl Gfx {
             primitive: wgpu::PrimitiveState { front_face: wgpu::FrontFace::Cw, cull_mode: None, ..Default::default() },
             depth_stencil: depth_state(false), multisample: Default::default(), multiview: None, cache: None,
         });
+        // `fx_*` textures (smoke): lit like the scene, blended over it, no depth or normal writes (SSAO and the shafts
+        // keep seeing the walls behind); the game draws them last
+        let smoke_pipe = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("smoke"),
+            layout: Some(&layout(&[&globals_layout, &tex_layout, &draw_layout, &shadow_layout])),
+            vertex: wgpu::VertexState { module: &scene_sh, entry_point: Some("vs"), compilation_options: Default::default(), buffers: &vbuf },
+            fragment: Some(wgpu::FragmentState { module: &scene_sh, entry_point: Some("fs"), compilation_options: Default::default(), targets: &[
+                Some(wgpu::ColorTargetState { format: HDR, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL }),
+                Some(wgpu::ColorTargetState { format: HDR, blend: None, write_mask: wgpu::ColorWrites::empty() }),
+            ] }),
+            primitive: wgpu::PrimitiveState { front_face: wgpu::FrontFace::Cw, cull_mode: None, ..Default::default() },
+            depth_stencil: depth_state(false), multisample: Default::default(), multiview: None, cache: None,
+        });
         let shadow_pipe = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("shadow"),
             layout: Some(&layout(&[&globals_layout, &draw_layout])),
@@ -530,7 +545,7 @@ impl Gfx {
             period: queue.get_timestamp_period(), ms: [0.0; STAMPS as usize], frame: 0.0, tris: [0; 3], cpu: [0.0; 3], frames: 0,
         });
         let mut g = Gfx {
-            window, surface, device, queue, config, scene_pipe, opaque_pipe, flash_pipe, shadow_pipe, fx_pipe, bright_pipe, blur_h_pipe, blur_v_pipe, post_pipe,
+            window, surface, device, queue, config, scene_pipe, opaque_pipe, flash_pipe, smoke_pipe, shadow_pipe, fx_pipe, bright_pipe, blur_h_pipe, blur_v_pipe, post_pipe,
             globals_buf, globals_bg, draw_buf, draw_bg, shadow_draw_bg, tex_layout, post_layout, fx_layout, bloom_layout,
             sampler, clamp_sampler, cmp_sampler, shadow_view, shadow_bg, cam_buf, cam_bg, lamp_static, lamp_live, lamp_static_layers,
             lamp_live_layers, lamp_array, lamp_keys: [None; LAMP_SLOTS], draw_data: vec![0; (DRAW_SLOT * MAX_DRAWS) as usize], textures: HashMap::new(), styles: materials::load(&asset_dir), meshes: vec![], t, post_buf, post_bg,
@@ -762,7 +777,7 @@ impl Gfx {
     /// Shadow casters among the world draws: `Some(true)` for static geometry (not `moving`, not skinned), which the
     /// lamp caches keep, `Some(false)` for moving casters redrawn every frame; unlit decals and bulbs don't cast.
     fn caster(&self, d: &DrawCmd) -> Option<bool> {
-        (!d.unlit).then(|| !d.moving && !self.meshes[d.mesh].dynamic.get() && d.fog > SHADOW_ONLY + 1.0)
+        (!d.unlit && !d.tex.starts_with("fx_")).then(|| !d.moving && !self.meshes[d.mesh].dynamic.get() && d.fog > SHADOW_ONLY + 1.0)
     }
 
     /// Draws `pass0` casters chosen by `keep` into a depth view from shadow camera `cam`. Returns triangles drawn.
@@ -867,7 +882,7 @@ impl Gfx {
 
         if let Some(p0) = passes.first() {
             // torch: everything lit except the body's own head/arms (the torch sits at the eye, they would black out the view)
-            tris[0] += self.shadow_pass(&mut enc, &self.shadow_view, true, 0, torch_vp, p0, |d| !d.unlit && d.fog > SHADOW_ONLY + 1.0, self.tw(0));
+            tris[0] += self.shadow_pass(&mut enc, &self.shadow_view, true, 0, torch_vp, p0, |d| !d.unlit && !d.tex.starts_with("fx_") && d.fog > SHADOW_ONLY + 1.0, self.tw(0));
             // lamps: a new lamp in a slot renders its static cache once; every frame the cache is copied and only
             // moving casters are drawn on top
             let active: Vec<usize> = (0..LAMP_SLOTS).filter(|&k| lamps[k].is_some()).collect();
@@ -905,7 +920,7 @@ impl Gfx {
             });
             // cut-outs and the own body need discard; everything else stays on the opaque pipeline (no discard
             // anywhere in it, so a tile GPU drops hidden fragments before shading them)
-            let mut bound = 3u8;
+            let mut bound = u8::MAX;
             let eye = Vec3::new(p.globals.cam_pos[0], p.globals.cam_pos[1], p.globals.cam_pos[2]);
             rp.set_bind_group(0, &self.globals_bg, &[(i as u64 * GLOBAL_SLOT) as u32]);
             rp.set_bind_group(3, &self.shadow_bg, &[]);
@@ -913,8 +928,9 @@ impl Gfx {
                 if slot >= MAX_DRAWS { break; }
                 let m = &self.meshes[d.mesh];
                 if d.fog <= SHADOW_ONLY + 1.0 || !m.visible(Mat4::from_cols_array_2d(&p.globals.view_proj)*d.model) {slot+=1;continue;}
-                let kind = if d.tex.starts_with("muzzle") { 0 } else if d.cutoff >= 0.0 || d.fog < 0.0 { 1 } else { 2 };
-                if kind != bound { rp.set_pipeline([&self.flash_pipe, &self.scene_pipe, &self.opaque_pipe][kind as usize]); bound = kind; }
+                // 0 additive flashes, 1 cut-outs / own body (discard), 2 opaque, 3 blended smoke (`fx_*`)
+                let kind = if d.tex.starts_with("muzzle") { 0 } else if d.tex.starts_with("fx_") { 3 } else if d.cutoff >= 0.0 || d.fog < 0.0 { 1 } else { 2 };
+                if kind != bound { rp.set_pipeline([&self.flash_pipe, &self.scene_pipe, &self.opaque_pipe, &self.smoke_pipe][kind as usize]); bound = kind; }
                 rp.set_bind_group(1, &self.textures[&d.tex], &[]);
                 rp.set_bind_group(2, &self.draw_bg, &[(slot * DRAW_SLOT) as u32]);
                 rp.set_vertex_buffer(0, m.vb.slice(..));
