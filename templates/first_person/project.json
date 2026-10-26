@@ -1,0 +1,8 @@
+{
+  "name": "{{NAME}}",
+  "start_scene": "scenes/main.json",
+  "assets": "assets",
+  "window": { "width": 1280, "height": 720 },
+  "render": { "frame_lines": 540, "look": "clean" },
+  "player": { "enabled": true, "flashlight": false }
+}

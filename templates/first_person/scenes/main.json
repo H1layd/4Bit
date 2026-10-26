@@ -1,0 +1,333 @@
+{
+ "env": {
+  "sky": [
+   0.18,
+   0.2,
+   0.26
+  ],
+  "key_dir": [
+   -0.4,
+   0.6,
+   -0.5
+  ],
+  "key": [
+   0.42,
+   0.38,
+   0.34
+  ],
+  "key_wrap": 0.2,
+  "indoor": [
+   0.12,
+   0.12,
+   0.11
+  ],
+  "fog": [
+   0.1,
+   0.11,
+   0.14
+  ],
+  "fog_range": [
+   25,
+   140
+  ],
+  "fog_indoor": [
+   0.02,
+   0.02,
+   0.02
+  ],
+  "fog_indoor_range": [
+   4,
+   40
+  ],
+  "storey": 0,
+  "zones": []
+ },
+ "entities": [
+  {
+   "name": "пол",
+   "type": "box",
+   "pos": [
+    0,
+    -0.1,
+    0
+   ],
+   "size": [
+    40,
+    0.2,
+    40
+   ],
+   "texture": "grid",
+   "tint": [
+    0.9,
+    0.9,
+    0.9
+   ],
+   "tile": 1.0
+  },
+  {
+   "name": "стена север",
+   "type": "box",
+   "pos": [
+    0,
+    1.5,
+    14
+   ],
+   "size": [
+    20,
+    3,
+    0.3
+   ],
+   "texture": "grid_dark",
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "tile": 1.0
+  },
+  {
+   "name": "стена запад",
+   "type": "box",
+   "pos": [
+    -10,
+    1.5,
+    4
+   ],
+   "size": [
+    0.3,
+    3,
+    20
+   ],
+   "texture": "grid_dark",
+   "tint": [
+    1,
+    1,
+    1
+   ],
+   "tile": 1.0
+  },
+  {
+   "name": "помост",
+   "type": "box",
+   "pos": [
+    5,
+    0.25,
+    9
+   ],
+   "size": [
+    4,
+    0.5,
+    3
+   ],
+   "texture": "grid",
+   "tint": [
+    0.75,
+    0.78,
+    0.85
+   ],
+   "tile": 1.0
+  },
+  {
+   "name": "ступень",
+   "type": "box",
+   "pos": [
+    5,
+    0.12,
+    7.1
+   ],
+   "size": [
+    4,
+    0.24,
+    0.8
+   ],
+   "texture": "grid",
+   "tint": [
+    0.75,
+    0.78,
+    0.85
+   ],
+   "tile": 1.0
+  },
+  {
+   "name": "машина",
+   "type": "model",
+   "model": "props/covered_car",
+   "pos": [
+    -4,
+    0,
+    8
+   ],
+   "yaw": 25,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "скамейка",
+   "type": "model",
+   "model": "props/painted_wooden_bench",
+   "pos": [
+    2,
+    0,
+    11
+   ],
+   "yaw": 180,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "стол",
+   "type": "model",
+   "model": "props/wooden_picnic_table",
+   "pos": [
+    -5,
+    0,
+    2
+   ],
+   "yaw": 10,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "урна",
+   "type": "model",
+   "model": "props/metal_trash_can",
+   "pos": [
+    4,
+    0,
+    11.5
+   ],
+   "yaw": 0,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "фонарь улицы",
+   "type": "model",
+   "model": "props/street_lamp_02",
+   "pos": [
+    -8,
+    0,
+    11
+   ],
+   "yaw": 0,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "ящик",
+   "type": "model",
+   "model": "props/plastic_crate_01",
+   "pos": [
+    6,
+    0.5,
+    9
+   ],
+   "yaw": 0,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "коробка",
+   "type": "model",
+   "model": "props/cardboard_box_01",
+   "pos": [
+    -2,
+    0,
+    12
+   ],
+   "yaw": 40,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "шина",
+   "type": "model",
+   "model": "props/old_tyre",
+   "pos": [
+    7,
+    0,
+    4
+   ],
+   "yaw": 0,
+   "scale": 1,
+   "solid": true
+  },
+  {
+   "name": "куст",
+   "type": "model",
+   "model": "props/shrub_02",
+   "pos": [
+    -9,
+    0,
+    -3
+   ],
+   "yaw": 0,
+   "scale": 1,
+   "solid": false
+  },
+  {
+   "name": "лампа 1",
+   "type": "light",
+   "pos": [
+    -8,
+    4.2,
+    11
+   ],
+   "color": [
+    1,
+    0.78,
+    0.5
+   ],
+   "intensity": 2.2,
+   "range": 12,
+   "flicker": 0,
+   "shadows": true
+  },
+  {
+   "name": "лампа 2",
+   "type": "light",
+   "pos": [
+    3,
+    3,
+    6
+   ],
+   "color": [
+    0.85,
+    0.9,
+    1.0
+   ],
+   "intensity": 1.4,
+   "range": 9,
+   "flicker": 0,
+   "shadows": true
+  },
+  {
+   "name": "лампа 3",
+   "type": "light",
+   "pos": [
+    -5,
+    2.6,
+    2
+   ],
+   "color": [
+    1,
+    0.6,
+    0.35
+   ],
+   "intensity": 1.2,
+   "range": 7,
+   "flicker": 0,
+   "shadows": true
+  },
+  {
+   "name": "старт",
+   "type": "spawn",
+   "pos": [
+    0,
+    0,
+    -4
+   ],
+   "yaw": 0
+  }
+ ]
+}

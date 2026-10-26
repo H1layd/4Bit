@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/fourbit", "crates/fourbit-editor"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+bytemuck = { version = "1", features = ["derive"] }
+glam = { version = "0.29", features = ["bytemuck"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+pollster = "0.4"
+wgpu = "24"
+winit = "0.30"
+fontdue = "0.9"
+rodio = { version = "0.20", default-features = false, features = ["wav"] }
+egui = "0.31"
+egui-wgpu = "0.31"
+egui-winit = "0.31"
+serde_json = "1"
+meshopt = "0.4"
+ureq = "2"
+lzma-rs = "0.3"
+
+[profile.dev]
+opt-level = 1
+[profile.dev.package."*"]
+opt-level = 3

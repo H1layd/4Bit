@@ -1,0 +1,33 @@
+[package]
+name = "fourbit-editor"
+description = "4bit hub (projects, assets, model and animation viewer, Workshop import, builds), the 4bit command line and the 4bit MCP server"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "fourbit_tools"
+path = "src/lib.rs"
+
+[[bin]]
+name = "4bit"
+path = "src/main.rs"
+
+[[bin]]
+name = "4bit-mcp"
+path = "src/mcp.rs"
+
+[dependencies]
+fourbit = { path = "../fourbit" }
+bytemuck.workspace = true
+glam.workspace = true
+image.workspace = true
+pollster.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+rodio.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+egui-winit.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+lzma-rs.workspace = true
